@@ -1,6 +1,7 @@
 import 'dart:developer';
 
 import 'package:flutter/services.dart';
+import 'package:oxidized/oxidized.dart';
 
 import 'zencillo_sunmi_platform_interface.dart';
 
@@ -61,7 +62,7 @@ class ZencilloSunmi {
     return ZencilloSunmiPlatform.instance.printImageBytes(bytes);
   }
 
-  static Future<void> sunmiPrint(
+  static Future<Result<Unit, String>> sunmiPrint(
     List<String> text, {
     String? code,
     int? tamanioLetra,
@@ -71,9 +72,7 @@ class ZencilloSunmi {
       final bind = await bindPrinter();
 
       if (!bind) {
-        throw const ZencilloSunmiException(
-          'No se pudo enlazar con la impresora Sunmi.',
-        );
+        return const Err('No se pudo enlazar con la impresora Sunmi.');
       }
 
       await Future.delayed(const Duration(milliseconds: 300));
@@ -81,9 +80,7 @@ class ZencilloSunmi {
       final connected = await isConnected();
 
       if (!connected) {
-        throw const ZencilloSunmiException(
-          'La impresora Sunmi no está conectada.',
-        );
+        return const Err('La impresora Sunmi no está conectada.');
       }
 
       await initPrinter();
@@ -113,22 +110,21 @@ class ZencilloSunmi {
           size: (tamanioLetra ?? 20).toDouble(),
         );
       }
+      return const Ok(unit);
     } on PlatformException catch (e, stacktrace) {
       log('Sunmi PlatformException ===> ${e.message}');
       log('Sunmi PlatformException stacktrace ===> $stacktrace');
 
-      throw ZencilloSunmiException(
-        e.message ?? 'Error de plataforma al imprimir en Sunmi.',
-      );
+      return Err(e.message ?? 'Error de plataforma al imprimir en Sunmi.');
     } catch (e, stacktrace) {
       log('Sunmi Printer FAILED ===> $e');
       log('Sunmi Printer FAILED stacktrace ===> $stacktrace');
 
       if (e is ZencilloSunmiException) {
-        rethrow;
+        return Err(e.message);
       }
 
-      throw const ZencilloSunmiException('Algo falló al imprimir en Sunmi.');
+      return const Err('Algo falló al imprimir en Sunmi.');
     }
   }
 
