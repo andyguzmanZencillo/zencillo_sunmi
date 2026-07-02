@@ -1,7 +1,6 @@
 package com.example.zencillo_sunmi
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.os.RemoteException
@@ -13,13 +12,13 @@ import com.sunmi.peripheral.printer.InnerPrinterManager
 import com.sunmi.peripheral.printer.SunmiPrinterService
 import com.sunmi.peripheral.printer.WoyouConsts
 import io.flutter.embedding.engine.plugins.FlutterPlugin
-import io.flutter.embedding.engine.plugins.activity.ActivityAware
-import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import java.util.regex.Pattern
+import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import io.flutter.plugin.common.MethodChannel.Result
 
-class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
+/** ZencilloSunmiPlugin */
+class ZencilloSunmiPlugin : FlutterPlugin, MethodCallHandler {
 
     companion object {
         private const val TAG = "ZencilloSunmiPlugin"
@@ -32,39 +31,42 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
     }
 
     private lateinit var channel: MethodChannel
-    private lateinit var applicationContext: Context
+    private lateinit var context: Context
 
-    private var activityContext: Context? = null
-    private var sunmiPrinterService: SunmiPrinterService? = null
-    private var sunmiPrinterStatus: Int = CHECK_SUNMI_PRINTER
+    private var printerService: SunmiPrinterService? = null
+    private var printerStatus: Int = CHECK_SUNMI_PRINTER
+    private var isBinding: Boolean = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val printerCallback = object : InnerPrinterCallback() {
         override fun onConnected(service: SunmiPrinterService?) {
-            Log.d(TAG, "SUNMI onConnected")
+            Log.d(TAG, "SUNMI onConnected service=$service")
 
-            sunmiPrinterService = service
+            printerService = service
+            isBinding = false
 
-            if (service != null) {
-                checkSunmiPrinterService(service)
-            } else {
-                sunmiPrinterStatus = NO_SUNMI_PRINTER
+            if (service == null) {
+                printerStatus = NO_SUNMI_PRINTER
+                return
             }
+
+            checkSunmiPrinterService(service)
         }
 
         override fun onDisconnected() {
             Log.d(TAG, "SUNMI onDisconnected")
 
-            sunmiPrinterService = null
-            sunmiPrinterStatus = LOST_SUNMI_PRINTER
+            printerService = null
+            printerStatus = LOST_SUNMI_PRINTER
+            isBinding = false
         }
     }
 
     override fun onAttachedToEngine(
         @NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     ) {
-        applicationContext = flutterPluginBinding.applicationContext
+        context = flutterPluginBinding.applicationContext
 
         channel = MethodChannel(
             flutterPluginBinding.binaryMessenger,
@@ -81,25 +83,7 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
         channel.setMethodCallHandler(null)
     }
 
-    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-        activityContext = binding.activity
-        initSunmiPrinterService()
-    }
-
-    override fun onDetachedFromActivityForConfigChanges() {
-        activityContext = null
-    }
-
-    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-        activityContext = binding.activity
-        initSunmiPrinterService()
-    }
-
-    override fun onDetachedFromActivity() {
-        activityContext = null
-    }
-
-    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+    override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "getPlatformVersion" -> {
                 result.success("Android ${android.os.Build.VERSION.RELEASE}")
@@ -110,12 +94,13 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             }
 
             "isConnected" -> {
-                result.success(isPrinterReady())
+                result.success(isPrinterAvailable())
             }
 
             "initPrinter" -> {
-                withReadyPrinter(result) { service ->
+                withPrinter(result) { service ->
                     service.printerInit(null)
+                    setLineSpacingZero(service)
                     result.success(true)
                 }
             }
@@ -126,37 +111,32 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                 val align = call.argument<Int>("align") ?: 0
                 val bold = call.argument<Boolean>("bold") ?: false
 
-                withReadyPrinter(result) { service ->
-                    setAlign(service, align)
+                withPrinter(result) { service ->
+                    service.setAlignment(align, null)
+                    setLineSpacingZero(service)
+                    setBold(service, bold)
 
-                    // Parecido al original:
-                    // SunmiPrintHelper.printText(content, size, isBold, isUnderLine)
-                    printTextOriginalStyle(
-                        service = service,
-                        content = text,
-                        size = size,
-                        isBold = bold,
-                        isUnderline = false
+                    service.printTextWithFont(
+                        text.trimEnd('\n', '\r'),
+                        null,
+                        size,
+                        null
                     )
 
-                    // Compatibilidad con tu Flutter actual:
-                    // tu app manda una línea por llamada a printText().
                     service.lineWrap(1, null)
+
+                    if (bold) {
+                        setBold(service, false)
+                    }
 
                     result.success(true)
                 }
             }
 
             "printLine" -> {
-                withReadyPrinter(result) { service ->
-                    setAlign(service, 0)
-                    printTextOriginalStyle(
-                        service = service,
-                        content = "--------------------------------",
-                        size = 24f,
-                        isBold = false,
-                        isUnderline = false
-                    )
+                withPrinter(result) { service ->
+                    setLineSpacingZero(service)
+                    service.printText("--------------------------------", null)
                     service.lineWrap(1, null)
                     result.success(true)
                 }
@@ -165,7 +145,7 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             "lineWrap" -> {
                 val lines = call.argument<Int>("lines") ?: 3
 
-                withReadyPrinter(result) { service ->
+                withPrinter(result) { service ->
                     service.lineWrap(lines, null)
                     result.success(true)
                 }
@@ -174,30 +154,33 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             "feedPaper" -> {
                 val lines = call.argument<Int>("lines") ?: 8
 
-                withReadyPrinter(result) { service ->
+                withPrinter(result) { service ->
                     try {
                         service.autoOutPaper(null)
                     } catch (e: RemoteException) {
                         service.lineWrap(lines, null)
                     }
+
                     result.success(true)
                 }
             }
 
             "cutPaper" -> {
-                withReadyPrinter(result) { service ->
+                withPrinter(result) { service ->
                     try {
                         service.cutPaper(null)
                     } catch (e: Exception) {
-                        Log.e(TAG, "cutPaper failed", e)
+                        Log.e(TAG, "SUNMI cutPaper error", e)
                     }
+
                     result.success(true)
                 }
             }
 
             "printQr" -> {
                 val data = call.argument<String>("data") ?: ""
-                val size = call.argument<Int>("size") ?: 5
+                val size = call.argument<Int>("size") ?: 6
+                val errorLevel = call.argument<Int>("errorLevel") ?: 2
 
                 if (data.isBlank()) {
                     result.error(
@@ -208,44 +191,17 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                     return
                 }
 
-                withReadyPrinter(result) { service ->
-                    setAlign(service, 1)
+                withPrinter(result) { service ->
+                    service.setAlignment(1, null)
+                    setLineSpacingZero(service)
 
-                    // Igual que la librería original:
-                    // printQr(data, 5, 0)
-                    service.printQRCode(data, size, 0, null)
-                    service.lineWrap(1, null)
-
-                    result.success(true)
-                }
-            }
-
-            "printImageBytes" -> {
-                val bytes = call.argument<ByteArray>("bytes")
-
-                if (bytes == null || bytes.isEmpty()) {
-                    result.error(
-                        "INVALID_IMAGE",
-                        "Los bytes de la imagen están vacíos.",
+                    service.printQRCode(
+                        data,
+                        size,
+                        errorLevel,
                         null
                     )
-                    return
-                }
 
-                withReadyPrinter(result) { service ->
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-
-                    if (bitmap == null) {
-                        result.error(
-                            "INVALID_IMAGE",
-                            "No se pudo decodificar la imagen.",
-                            null
-                        )
-                        return@withReadyPrinter
-                    }
-
-                    setAlign(service, 1)
-                    service.printBitmap(bitmap, null)
                     service.lineWrap(1, null)
 
                     result.success(true)
@@ -258,138 +214,148 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
         }
     }
 
-    private fun getSafeContext(): Context {
-        return activityContext ?: applicationContext
-    }
-
     /**
-     * Parecido a:
-     * SunmiPrintHelper.getInstance().initSunmiPrinterService(context)
+     * Implementación oficial SUNMI:
+     * InnerPrinterManager.getInstance().bindService(context, printerCallback)
      */
     private fun initSunmiPrinterService(): Boolean {
+        if (printerService != null) {
+            return true
+        }
+
+        if (isBinding) {
+            return true
+        }
+
         return try {
-            var ret = false
+            isBinding = true
+            printerStatus = CHECK_SUNMI_PRINTER
 
-            for (attempt in 0..50) {
-                ret = InnerPrinterManager.getInstance()
-                    .bindService(getSafeContext(), printerCallback)
+            val started = InnerPrinterManager.getInstance()
+                .bindService(context, printerCallback)
 
-                if (ret) {
-                    Log.d(TAG, "SUNMI bindService OK attempt=$attempt")
-                    break
-                }
+            Log.d(TAG, "SUNMI bindService started=$started")
+
+            if (!started) {
+                isBinding = false
+                printerStatus = NO_SUNMI_PRINTER
             }
 
-            if (!ret) {
-                sunmiPrinterStatus = NO_SUNMI_PRINTER
-            }
-
-            ret
+            started
         } catch (e: InnerPrinterException) {
-            Log.e(TAG, "SUNMI bindService error", e)
-            sunmiPrinterStatus = NO_SUNMI_PRINTER
+            isBinding = false
+            printerStatus = NO_SUNMI_PRINTER
+            Log.e(TAG, "SUNMI bindService InnerPrinterException", e)
             false
         } catch (e: Exception) {
-            Log.e(TAG, "SUNMI bindService unexpected error", e)
-            sunmiPrinterStatus = NO_SUNMI_PRINTER
+            isBinding = false
+            printerStatus = NO_SUNMI_PRINTER
+            Log.e(TAG, "SUNMI bindService Exception", e)
             false
         }
     }
 
+    /**
+     * Implementación oficial SUNMI:
+     * InnerPrinterManager.getInstance().unBindService(context, printerCallback)
+     */
     private fun deInitSunmiPrinterService() {
         try {
-            if (sunmiPrinterService != null) {
-                InnerPrinterManager.getInstance()
-                    .unBindService(getSafeContext(), printerCallback)
-            }
+            InnerPrinterManager.getInstance()
+                .unBindService(context, printerCallback)
         } catch (e: Exception) {
             Log.e(TAG, "SUNMI unBindService error", e)
         } finally {
-            sunmiPrinterService = null
-            sunmiPrinterStatus = LOST_SUNMI_PRINTER
+            printerService = null
+            printerStatus = LOST_SUNMI_PRINTER
+            isBinding = false
         }
     }
 
     /**
-     * Parecido a:
-     * checkSunmiPrinterService(service)
+     * Patrón del demo oficial:
+     * validar si el service realmente tiene impresora.
      */
     private fun checkSunmiPrinterService(service: SunmiPrinterService) {
         val hasPrinter = try {
             InnerPrinterManager.getInstance().hasPrinter(service)
+        } catch (e: InnerPrinterException) {
+            Log.e(TAG, "SUNMI hasPrinter InnerPrinterException", e)
+            false
         } catch (e: Exception) {
-            Log.e(TAG, "SUNMI hasPrinter error", e)
+            Log.e(TAG, "SUNMI hasPrinter Exception", e)
             false
         }
 
-        sunmiPrinterStatus = if (hasPrinter) {
+        printerStatus = if (hasPrinter) {
             FOUND_SUNMI_PRINTER
         } else {
             NO_SUNMI_PRINTER
         }
 
-        Log.d(TAG, "SUNMI printer status=$sunmiPrinterStatus")
+        Log.d(TAG, "SUNMI hasPrinter=$hasPrinter status=$printerStatus")
     }
 
-    /**
-     * Antes tu bindPrinter devolvía true inmediatamente.
-     * Ahora espera hasta que setAlign(1) funcione, igual que el Java original.
-     */
-    private fun bindPrinter(result: MethodChannel.Result) {
-    try {
-        if (sunmiPrinterService != null) {
+    private fun bindPrinter(result: Result) {
+        if (isPrinterAvailable()) {
             result.success(true)
             return
         }
 
         val started = initSunmiPrinterService()
 
-        // Parecido al código original:
-        // iniciar el servicio y dejar que los métodos de impresión esperen.
-        result.success(started || sunmiPrinterService != null)
-    } catch (e: Exception) {
-        Log.e(TAG, "SUNMI bindPrinter error", e)
+        if (!started && printerService == null) {
+            result.success(false)
+            return
+        }
 
-        // No crashear la app.
-        // Pero tampoco cortar agresivamente como antes.
-        result.success(false)
+        waitForPrinter(
+            maxAttempts = 40,
+            delayMs = 150L,
+            onReady = {
+                result.success(true)
+            },
+            onTimeout = {
+                result.success(false)
+            }
+        )
     }
-}
 
-    private fun isPrinterReady(): Boolean {
-    val service = sunmiPrinterService ?: return false
+    private fun isPrinterAvailable(): Boolean {
+        val service = printerService ?: return false
 
-    return try {
-        InnerPrinterManager.getInstance().hasPrinter(service)
-    } catch (e: Exception) {
-        Log.e(TAG, "SUNMI isPrinterReady error", e)
-        false
+        return try {
+            InnerPrinterManager.getInstance().hasPrinter(service)
+        } catch (e: Exception) {
+            Log.e(TAG, "SUNMI isPrinterAvailable error", e)
+
+            // Algunos modelos viejos fallan en hasPrinter aunque imprimen.
+            // Si quieres ser 100% estricto con la documentación oficial, cambia esto a false.
+            true
+        }
     }
-}
 
-    /**
-     * Este método hace que tus métodos actuales de Flutter sean seguros.
-     * Si Flutter llama printText() muy rápido, Kotlin espera la conexión.
-     */
-    private fun withReadyPrinter(
-        result: MethodChannel.Result,
+    private fun withPrinter(
+        result: Result,
         action: (SunmiPrinterService) -> Unit
     ) {
-        val service = sunmiPrinterService
+        val currentService = printerService
 
-        if (service != null && setAlign(service, 1)) {
+        if (currentService != null) {
             try {
-                action(service)
+                action(currentService)
             } catch (e: RemoteException) {
+                Log.e(TAG, "SUNMI RemoteException", e)
                 result.error(
                     "SUNMI_REMOTE_ERROR",
                     e.message ?: "Error remoto de impresora Sunmi.",
                     null
                 )
             } catch (e: Exception) {
+                Log.e(TAG, "SUNMI Exception", e)
                 result.error(
-                    "SUNMI_PRINT_ERROR",
-                    e.message ?: "Error imprimiendo en Sunmi.",
+                    "SUNMI_ERROR",
+                    e.message ?: "Error ejecutando operación Sunmi.",
                     null
                 )
             }
@@ -398,20 +364,20 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
 
         val started = initSunmiPrinterService()
 
-        if (!started && sunmiPrinterService == null) {
+        if (!started && printerService == null) {
             result.error(
-                "PRINTER_NOT_CONNECTED",
-                "La impresora Sunmi no está conectada.",
+                "PRINTER_BIND_FAILED",
+                "No se pudo enlazar con el servicio de impresora Sunmi.",
                 null
             )
             return
         }
 
-        waitUntilPrinterReady(
-            maxAttempts = 50,
-            delayMs = 200L,
+        waitForPrinter(
+            maxAttempts = 40,
+            delayMs = 150L,
             onReady = {
-                val readyService = sunmiPrinterService
+                val readyService = printerService
 
                 if (readyService == null) {
                     result.error(
@@ -419,49 +385,53 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                         "La impresora Sunmi no está conectada.",
                         null
                     )
-                    return@waitUntilPrinterReady
+                    return@waitForPrinter
                 }
 
                 try {
                     action(readyService)
                 } catch (e: RemoteException) {
+                    Log.e(TAG, "SUNMI RemoteException", e)
                     result.error(
                         "SUNMI_REMOTE_ERROR",
                         e.message ?: "Error remoto de impresora Sunmi.",
                         null
                     )
                 } catch (e: Exception) {
+                    Log.e(TAG, "SUNMI Exception", e)
                     result.error(
-                        "SUNMI_PRINT_ERROR",
-                        e.message ?: "Error imprimiendo en Sunmi.",
+                        "SUNMI_ERROR",
+                        e.message ?: "Error ejecutando operación Sunmi.",
                         null
                     )
                 }
             },
             onTimeout = {
                 result.error(
-                    "PRINTER_CONNECTION_TIMEOUT",
-                    "La impresora Sunmi no respondió a tiempo.",
+                    "PRINTER_NOT_CONNECTED",
+                    "La impresora Sunmi no está conectada.",
                     null
                 )
             }
         )
     }
 
-    /**
-     * Igual que el Java original:
-     * antes de imprimir prueba setAlign(1).
-     */
-    private fun waitUntilPrinterReady(
+    private fun waitForPrinter(
         maxAttempts: Int,
         delayMs: Long,
         attempt: Int = 0,
         onReady: () -> Unit,
         onTimeout: () -> Unit
     ) {
-        val service = sunmiPrinterService
+        val service = printerService
 
-        if (service != null && setAlign(service, 1)) {
+        if (service != null) {
+            try {
+                checkSunmiPrinterService(service)
+            } catch (e: Exception) {
+                Log.e(TAG, "SUNMI check during wait error", e)
+            }
+
             onReady()
             return
         }
@@ -472,7 +442,7 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
         }
 
         mainHandler.postDelayed({
-            waitUntilPrinterReady(
+            waitForPrinter(
                 maxAttempts = maxAttempts,
                 delayMs = delayMs,
                 attempt = attempt + 1,
@@ -480,45 +450,6 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                 onTimeout = onTimeout
             )
         }, delayMs)
-    }
-
-    /**
-     * Parecido a:
-     * SunmiPrintHelper.setAlign(int align)
-     */
-    private fun setAlign(service: SunmiPrinterService, align: Int): Boolean {
-        return try {
-            service.setAlignment(align, null)
-            Log.d(TAG, "SUNMI setAlign OK align=$align")
-            true
-        } catch (e: RemoteException) {
-            Log.e(TAG, "SUNMI setAlign RemoteException", e)
-            false
-        } catch (e: Exception) {
-            Log.e(TAG, "SUNMI setAlign Exception", e)
-            false
-        }
-    }
-
-    /**
-     * Parecido a:
-     * SunmiPrintHelper.printText(content, size, isBold, isUnderLine)
-     */
-    private fun printTextOriginalStyle(
-        service: SunmiPrinterService,
-        content: String,
-        size: Float,
-        isBold: Boolean,
-        isUnderline: Boolean
-    ) {
-        setLineSpacingZero(service)
-        setBold(service, isBold)
-        setUnderline(service, isUnderline)
-
-        // Importante:
-        // No hacemos trimEnd aquí.
-        // La librería original imprimía el content tal cual llegaba.
-        service.printTextWithFont(content, null, size, null)
     }
 
     private fun setLineSpacingZero(service: SunmiPrinterService) {
@@ -549,52 +480,4 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             Log.e(TAG, "SUNMI setBold error", e)
         }
     }
-
-    private fun setUnderline(service: SunmiPrinterService, enabled: Boolean) {
-        try {
-            service.setPrinterStyle(
-                WoyouConsts.ENABLE_UNDERLINE,
-                if (enabled) WoyouConsts.ENABLE else WoyouConsts.DISABLE
-            )
-        } catch (e: RemoteException) {
-            val command = if (enabled) {
-                byteArrayOf(0x1B, 0x2D, 0x01)
-            } else {
-                byteArrayOf(0x1B, 0x2D, 0x00)
-            }
-
-            service.sendRAWData(command, null)
-        } catch (e: Exception) {
-            Log.e(TAG, "SUNMI setUnderline error", e)
-        }
-    }
-
-    /**
-     * Lo dejo preparado por si luego quieres usar el formato original:
-     * !-QR-!contenido_qr!-QR-!
-     *
-     * No rompe tu Flutter actual.
-     */
-    private fun extractAndRemoveQrCodeUrl(input: String): QrExtractionResult {
-        val pattern = Pattern.compile("!-QR-!(.*?)!-QR-!")
-        val matcher = pattern.matcher(input)
-
-        var extractedQr: String? = null
-        var modifiedInput = input
-
-        if (matcher.find()) {
-            extractedQr = matcher.group(1)
-            modifiedInput = matcher.replaceFirst("")
-        }
-
-        return QrExtractionResult(
-            extractedCodeQR = extractedQr,
-            modifiedInput = modifiedInput
-        )
-    }
-
-    private data class QrExtractionResult(
-        val extractedCodeQR: String?,
-        val modifiedInput: String
-    )
 }

@@ -48,13 +48,19 @@ class ZencilloSunmi {
     return ZencilloSunmiPlatform.instance.cutPaper();
   }
 
+  static Future<bool> feedPaper({int lines = 8}) {
+    return ZencilloSunmiPlatform.instance.feedPaper(lines: lines);
+  }
+
   static Future<bool> printQr(
     String data, {
     int size = 6,
+    int errorLevel = 2,
   }) {
     return ZencilloSunmiPlatform.instance.printQr(
       data,
       size: size,
+      errorLevel: errorLevel,
     );
   }
 
@@ -69,16 +75,29 @@ class ZencilloSunmi {
     bool? isQr,
   }) async {
     try {
-      await bindPrinter();
+      final fontSize = (tamanioLetra ?? 20).toDouble();
+
+      final bindOk = await bindPrinter();
+
+      if (!bindOk) {
+        return const Err('No se pudo enlazar con la impresora Sunmi.');
+      }
 
       await initPrinter();
 
       for (final element in text) {
-        await printText(
-          element.trimRight(),
-          align: SunmiAlign.center,
-          size: (tamanioLetra ?? 20).toDouble(),
-        );
+        final line = element.trimRight();
+
+        if (line.isEmpty) {
+          await lineWrap(lines: 1);
+        } else {
+          await printText(
+            line,
+            align: SunmiAlign.center,
+            size: fontSize,
+            bold: false,
+          );
+        }
       }
 
       if (code != null && code.trim().isNotEmpty && (isQr ?? false)) {
@@ -88,7 +107,13 @@ class ZencilloSunmi {
           size: (tamanioLetra ?? 20).toDouble(),
         );
 
-        await printQr(code);
+        await printQr(
+          code.trim(),
+          size: 6,
+          errorLevel: 2,
+        );
+
+        await lineWrap(lines: 1);
       }
 
       for (int x = 1; x <= 6; x++) {
@@ -115,10 +140,6 @@ class ZencilloSunmi {
 
       return const Err('Algo falló al imprimir en Sunmi.');
     }
-  }
-
-  static Future<bool> feedPaper({int lines = 8}) {
-    return ZencilloSunmiPlatform.instance.feedPaper(lines: lines);
   }
 }
 

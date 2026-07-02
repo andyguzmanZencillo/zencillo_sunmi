@@ -84,11 +84,16 @@ class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
   Future<bool> printQr(
     String data, {
     int size = 6,
+    int errorLevel = 2,
   }) async {
-    final result = await methodChannel.invokeMethod<bool>('printQr', {
-      'data': data,
-      'size': size,
-    });
+    final result = await methodChannel.invokeMethod<bool>(
+      'printQr',
+      {
+        'data': data,
+        'size': size,
+        'errorLevel': errorLevel,
+      },
+    );
 
     return result ?? false;
   }

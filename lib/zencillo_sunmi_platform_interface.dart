@@ -58,8 +58,9 @@ abstract class ZencilloSunmiPlatform extends PlatformInterface {
   Future<bool> printQr(
     String data, {
     int size = 6,
+    int errorLevel = 2,
   }) {
-    throw UnimplementedError('printQr() no implementado.');
+    throw UnimplementedError('printQr() has not been implemented.');
   }
 
   Future<bool> feedPaper({int lines = 8}) {
