@@ -69,17 +69,7 @@ class ZencilloSunmi {
     bool? isQr,
   }) async {
     try {
-      final bind = await bindPrinter();
-
-      if (!bind) {
-        return const Err('No se pudo enlazar con la impresora Sunmi.');
-      }
-
-      final connected = await isConnected();
-
-      if (!connected) {
-        return const Err('La impresora Sunmi no está conectada.');
-      }
+      await bindPrinter();
 
       await initPrinter();
 
@@ -110,7 +100,8 @@ class ZencilloSunmi {
       }
       return const Ok(unit);
     } on PlatformException catch (e, stacktrace) {
-      log('Sunmi PlatformException ===> ${e.message}');
+      log('Sunmi PlatformException code ===> ${e.code}');
+      log('Sunmi PlatformException message ===> ${e.message}');
       log('Sunmi PlatformException stacktrace ===> $stacktrace');
 
       return Err(e.message ?? 'Error de plataforma al imprimir en Sunmi.');

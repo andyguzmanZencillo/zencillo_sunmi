@@ -336,49 +336,36 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
      * Ahora espera hasta que setAlign(1) funcione, igual que el Java original.
      */
     private fun bindPrinter(result: MethodChannel.Result) {
-        if (isPrinterReady()) {
+    try {
+        if (sunmiPrinterService != null) {
             result.success(true)
             return
         }
 
         val started = initSunmiPrinterService()
 
-        if (!started && sunmiPrinterService == null) {
-            result.error(
-                "PRINTER_BIND_FAILED",
-                "No se pudo enlazar con el servicio de impresora Sunmi.",
-                null
-            )
-            return
-        }
+        // Parecido al código original:
+        // iniciar el servicio y dejar que los métodos de impresión esperen.
+        result.success(started || sunmiPrinterService != null)
+    } catch (e: Exception) {
+        Log.e(TAG, "SUNMI bindPrinter error", e)
 
-        waitUntilPrinterReady(
-            maxAttempts = 50,
-            delayMs = 200L,
-            onReady = {
-                result.success(true)
-            },
-            onTimeout = {
-                result.error(
-                    "PRINTER_CONNECTION_TIMEOUT",
-                    "La impresora Sunmi no se conectó dentro del tiempo esperado.",
-                    null
-                )
-            }
-        )
+        // No crashear la app.
+        // Pero tampoco cortar agresivamente como antes.
+        result.success(false)
     }
+}
 
     private fun isPrinterReady(): Boolean {
-        val service = sunmiPrinterService ?: return false
+    val service = sunmiPrinterService ?: return false
 
-        return try {
-            val hasPrinter = InnerPrinterManager.getInstance().hasPrinter(service)
-            hasPrinter && setAlign(service, 1)
-        } catch (e: Exception) {
-            Log.e(TAG, "SUNMI isPrinterReady error", e)
-            false
-        }
+    return try {
+        InnerPrinterManager.getInstance().hasPrinter(service)
+    } catch (e: Exception) {
+        Log.e(TAG, "SUNMI isPrinterReady error", e)
+        false
     }
+}
 
     /**
      * Este método hace que tus métodos actuales de Flutter sean seguros.
