@@ -30,10 +30,14 @@ class SunmiPrintHelper private constructor() {
         private set
 
     private var sunmiPrinterService: SunmiPrinterService? = null
+    private var isBinding: Boolean = false
 
     private val innerPrinterCallback = object : InnerPrinterCallback() {
         override fun onConnected(service: SunmiPrinterService?) {
+            Log.d(TAG, "onConnected service=$service")
+
             sunmiPrinterService = service
+            isBinding = false
 
             if (service != null) {
                 checkSunmiPrinterService(service)
@@ -43,13 +47,26 @@ class SunmiPrintHelper private constructor() {
         }
 
         override fun onDisconnected() {
+            Log.d(TAG, "onDisconnected")
+
             sunmiPrinterService = null
             sunmiPrinter = LostSunmiPrinter
+            isBinding = false
         }
     }
 
     fun initSunmiPrinterService(context: Context) {
         try {
+            if (sunmiPrinterService != null) {
+                return
+            }
+
+            if (isBinding) {
+                return
+            }
+
+            isBinding = true
+
             var ret = false
 
             for (nIntento in 0..50) {
@@ -58,19 +75,24 @@ class SunmiPrintHelper private constructor() {
                     innerPrinterCallback
                 )
 
+                Log.d(TAG, "bindService intento=$nIntento ret=$ret")
+
                 if (ret) {
                     break
                 }
             }
 
             if (!ret) {
+                isBinding = false
                 sunmiPrinter = NoSunmiPrinter
             }
         } catch (e: InnerPrinterException) {
             e.printStackTrace()
+            isBinding = false
             sunmiPrinter = NoSunmiPrinter
         } catch (e: Exception) {
             e.printStackTrace()
+            isBinding = false
             sunmiPrinter = NoSunmiPrinter
         }
     }
@@ -90,6 +112,8 @@ class SunmiPrintHelper private constructor() {
             e.printStackTrace()
         } catch (e: Exception) {
             e.printStackTrace()
+        } finally {
+            isBinding = false
         }
     }
 
@@ -100,9 +124,17 @@ class SunmiPrintHelper private constructor() {
             ret = InnerPrinterManager.getInstance().hasPrinter(service)
         } catch (e: InnerPrinterException) {
             e.printStackTrace()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
-        sunmiPrinter = if (ret) FoundSunmiPrinter else NoSunmiPrinter
+        sunmiPrinter = if (ret) {
+            FoundSunmiPrinter
+        } else {
+            NoSunmiPrinter
+        }
+
+        Log.d(TAG, "checkSunmiPrinterService ret=$ret sunmiPrinter=$sunmiPrinter")
     }
 
     private fun handleRemoteException(e: RemoteException) {
@@ -130,6 +162,8 @@ class SunmiPrintHelper private constructor() {
             service.cutPaper(null)
         } catch (e: RemoteException) {
             handleRemoteException(e)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -200,7 +234,11 @@ class SunmiPrintHelper private constructor() {
         val service = sunmiPrinterService ?: return ""
 
         return try {
-            if (service.printerPaper == 1) "58mm" else "80mm"
+            if (service.printerPaper == 1) {
+                "58mm"
+            } else {
+                "80mm"
+            }
         } catch (e: RemoteException) {
             handleRemoteException(e)
             ""
@@ -285,6 +323,8 @@ class SunmiPrintHelper private constructor() {
             service.printTextWithFont(content, null, size, null)
         } catch (e: RemoteException) {
             handleRemoteException(e)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -299,6 +339,8 @@ class SunmiPrintHelper private constructor() {
             service.printQRCode(data, modulesize, errorlevel, null)
         } catch (e: RemoteException) {
             handleRemoteException(e)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

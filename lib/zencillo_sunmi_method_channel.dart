@@ -36,6 +36,29 @@ class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
     return result ?? false;
   }
 
+  /// Igual al método original Java:
+  ///
+  /// PrintSunmy.initPrint(String sContent, int nSize)
+  @override
+  Future<bool> initPrint(
+    String sContent, {
+    int nSize = 24,
+  }) async {
+    debugPrint('SUNMI_CHANNEL ===> invoke initPrint');
+
+    final result = await methodChannel.invokeMethod<bool>(
+      'initPrint',
+      {
+        'sContent': sContent,
+        'nSize': nSize,
+      },
+    );
+
+    debugPrint('SUNMI_CHANNEL ===> initPrint result: $result');
+
+    return result ?? false;
+  }
+
   @override
   Future<bool> printText(
     String text, {
@@ -116,38 +139,6 @@ class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
       'printImageBytes',
       {
         'bytes': bytes,
-      },
-    );
-
-    return result ?? false;
-  }
-
-  @override
-  Future<bool> printOriginal(
-    String content, {
-    int size = 24,
-  }) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'printOriginal',
-      {
-        'content': content,
-        'size': size,
-      },
-    );
-
-    return result ?? false;
-  }
-
-  @override
-  Future<bool> printSunmiOriginal(
-    String content, {
-    int size = 24,
-  }) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'printSunmiOriginal',
-      {
-        'content': content,
-        'size': size,
       },
     );
 

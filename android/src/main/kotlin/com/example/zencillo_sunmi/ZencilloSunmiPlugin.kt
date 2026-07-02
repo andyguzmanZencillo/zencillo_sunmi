@@ -3,6 +3,7 @@ package com.example.zencillo_sunmi
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.NonNull
 import com.example.zencillo_sunmi.sunmy.PrintSunmy
 import com.example.zencillo_sunmi.sunmy.SunmiPrintHelper
@@ -13,6 +14,11 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
+
+    companion object {
+        private const val TAG = "ZencilloSunmiPlugin"
+        private const val CHANNEL_NAME = "zencillo_sunmi"
+    }
 
     private lateinit var channel: MethodChannel
     private lateinit var applicationContext: Context
@@ -27,11 +33,13 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
     override fun onAttachedToEngine(
         @NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     ) {
+        Log.d(TAG, "onAttachedToEngine")
+
         applicationContext = flutterPluginBinding.applicationContext
 
         channel = MethodChannel(
             flutterPluginBinding.binaryMessenger,
-            "zencillo_sunmi"
+            CHANNEL_NAME
         )
 
         channel.setMethodCallHandler(this)
@@ -40,11 +48,15 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        Log.d(TAG, "onDetachedFromEngine")
+
         SunmiPrintHelper.getInstance().deInitSunmiPrinterService(applicationContext)
         channel.setMethodCallHandler(null)
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        Log.d(TAG, "onAttachedToActivity")
+
         activityContext = binding.activity
         SunmiPrintHelper.getInstance().initSunmiPrinterService(getSafeContext())
     }
@@ -54,6 +66,8 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        Log.d(TAG, "onReattachedToActivityForConfigChanges")
+
         activityContext = binding.activity
         SunmiPrintHelper.getInstance().initSunmiPrinterService(getSafeContext())
     }
@@ -63,6 +77,8 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        Log.d(TAG, "method=${call.method}")
+
         when (call.method) {
             "getPlatformVersion" -> {
                 result.success("Android ${android.os.Build.VERSION.RELEASE}")
@@ -80,6 +96,43 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             "initPrinter" -> {
                 SunmiPrintHelper.getInstance().initPrinter()
                 result.success(true)
+            }
+
+            /**
+             * Método principal igual al Java original:
+             *
+             * PrintSunmy().initPrint(sContent, nSize)
+             */
+            "initPrint" -> {
+                val sContent = call.argument<String>("sContent")
+                    ?: call.argument<String>("content")
+                    ?: ""
+
+                val nSize = call.argument<Int>("nSize")
+                    ?: call.argument<Int>("size")
+                    ?: 24
+
+                Log.d(TAG, "initPrint called")
+                Log.d(TAG, "nSize=$nSize")
+                Log.d(TAG, "sContent=$sContent")
+
+                SunmiPrintHelper.getInstance().initSunmiPrinterService(getSafeContext())
+
+                PrintSunmy().initPrint(sContent, nSize) { ok, error ->
+                    mainHandler.post {
+                        Log.d(TAG, "initPrint result ok=$ok error=$error")
+
+                        if (ok) {
+                            result.success(true)
+                        } else {
+                            result.error(
+                                "INIT_PRINT_ERROR",
+                                error ?: "Error imprimiendo en Sunmi.",
+                                null
+                            )
+                        }
+                    }
+                }
             }
 
             "printText" -> {
@@ -103,6 +156,7 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                                 mainHandler.post {
                                     result.success(true)
                                 }
+
                                 return@Thread
                             } else {
                                 Thread.sleep(500)
@@ -143,6 +197,7 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                                 mainHandler.post {
                                     result.success(true)
                                 }
+
                                 return@Thread
                             } else {
                                 Thread.sleep(500)
@@ -202,6 +257,7 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                                 mainHandler.post {
                                     result.success(true)
                                 }
+
                                 return@Thread
                             } else {
                                 Thread.sleep(500)
@@ -225,32 +281,6 @@ class ZencilloSunmiPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                         }
                     }
                 }.start()
-            }
-
-            "printOriginal", "printSunmiOriginal" -> {
-                val content = call.argument<String>("content")
-                    ?: call.argument<String>("text")
-                    ?: ""
-
-                val size = call.argument<Int>("size")
-                    ?: call.argument<Int>("nSize")
-                    ?: 24
-
-                SunmiPrintHelper.getInstance().initSunmiPrinterService(getSafeContext())
-
-                PrintSunmy().initPrint(content, size) { ok, error ->
-                    mainHandler.post {
-                        if (ok) {
-                            result.success(true)
-                        } else {
-                            result.error(
-                                "PRINT_ORIGINAL_ERROR",
-                                error ?: "Error imprimiendo en Sunmi.",
-                                null
-                            )
-                        }
-                    }
-                }
             }
 
             else -> {

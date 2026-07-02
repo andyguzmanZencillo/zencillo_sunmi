@@ -34,6 +34,16 @@ abstract class ZencilloSunmiPlatform extends PlatformInterface {
     throw UnimplementedError('initPrinter() no implementado.');
   }
 
+  /// Igual al método original Java:
+  ///
+  /// PrintSunmy.initPrint(String sContent, int nSize)
+  Future<bool> initPrint(
+    String sContent, {
+    int nSize = 24,
+  }) {
+    throw UnimplementedError('initPrint() no implementado.');
+  }
+
   Future<bool> printText(
     String text, {
     double size = 24,
@@ -69,21 +79,5 @@ abstract class ZencilloSunmiPlatform extends PlatformInterface {
 
   Future<bool> printImageBytes(Uint8List bytes) {
     throw UnimplementedError('printImageBytes() no implementado.');
-  }
-
-  /// Nuevo método para usar el flujo igual al Java original.
-  Future<bool> printOriginal(
-    String content, {
-    int size = 24,
-  }) {
-    throw UnimplementedError('printOriginal() no implementado.');
-  }
-
-  /// Alias del método anterior.
-  Future<bool> printSunmiOriginal(
-    String content, {
-    int size = 24,
-  }) {
-    throw UnimplementedError('printSunmiOriginal() no implementado.');
   }
 }

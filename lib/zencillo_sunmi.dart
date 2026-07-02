@@ -23,6 +23,19 @@ class ZencilloSunmi {
     return ZencilloSunmiPlatform.instance.initPrinter();
   }
 
+  /// Igual al método original Java:
+  ///
+  /// PrintSunmy.initPrint(String sContent, int nSize)
+  static Future<bool> initPrint(
+    String sContent, {
+    int nSize = 24,
+  }) {
+    return ZencilloSunmiPlatform.instance.initPrint(
+      sContent,
+      nSize: nSize,
+    );
+  }
+
   static Future<bool> printText(
     String text, {
     double size = 24,
@@ -69,41 +82,13 @@ class ZencilloSunmi {
     return ZencilloSunmiPlatform.instance.printImageBytes(bytes);
   }
 
-  /// Nuevo método principal.
+  /// Método que usa tu app.
   ///
-  /// Este llama al método Kotlin `printOriginal`, que replica:
+  /// Arma el String completo y llama a:
   ///
-  /// PrintSunmy.initPrint(sContent, nSize)
+  /// initPrint(sContent, nSize)
   ///
-  /// Si el contenido trae QR, debe venir así:
-  ///
-  /// !-QR-!contenido_del_qr!-QR-!
-  static Future<bool> printOriginal(
-    String content, {
-    int size = 24,
-  }) {
-    return ZencilloSunmiPlatform.instance.printOriginal(
-      content,
-      size: size,
-    );
-  }
-
-  /// Alias por si prefieres este nombre.
-  static Future<bool> printSunmiOriginal(
-    String content, {
-    int size = 24,
-  }) {
-    return ZencilloSunmiPlatform.instance.printSunmiOriginal(
-      content,
-      size: size,
-    );
-  }
-
-  /// Método que tu app puede seguir usando igual que antes.
-  ///
-  /// Pero internamente ahora arma un solo String completo y llama
-  /// a `printOriginal`, para que Android/Kotlin imprima igual que
-  /// la librería Java original.
+  /// igual que la librería Java original.
   static Future<Result<Unit, String>> sunmiPrint(
     List<String> text, {
     String? code,
@@ -111,6 +96,8 @@ class ZencilloSunmi {
     bool? isQr,
   }) async {
     try {
+      log('SUNMI_DART ===> sunmiPrint START');
+
       final fontSize = tamanioLetra ?? 20;
       final buffer = StringBuffer();
 
@@ -124,10 +111,18 @@ class ZencilloSunmi {
         buffer.writeln();
       }
 
-      final ok = await printOriginal(
-        buffer.toString(),
-        size: fontSize,
+      final sContent = buffer.toString();
+
+      log('SUNMI_DART ===> calling initPrint');
+      log('SUNMI_DART ===> nSize: $fontSize');
+      log('SUNMI_DART ===> sContent: $sContent');
+
+      final ok = await initPrint(
+        sContent,
+        nSize: fontSize,
       );
+
+      log('SUNMI_DART ===> initPrint response: $ok');
 
       if (!ok) {
         return const Err('No se pudo imprimir en Sunmi.');
@@ -135,14 +130,14 @@ class ZencilloSunmi {
 
       return const Ok(unit);
     } on PlatformException catch (e, stacktrace) {
-      log('Sunmi PlatformException code ===> ${e.code}');
-      log('Sunmi PlatformException message ===> ${e.message}');
-      log('Sunmi PlatformException stacktrace ===> $stacktrace');
+      log('SUNMI_DART PlatformException code ===> ${e.code}');
+      log('SUNMI_DART PlatformException message ===> ${e.message}');
+      log('SUNMI_DART PlatformException stacktrace ===> $stacktrace');
 
       return Err(e.message ?? 'Error de plataforma al imprimir en Sunmi.');
     } catch (e, stacktrace) {
-      log('Sunmi Printer FAILED ===> $e');
-      log('Sunmi Printer FAILED stacktrace ===> $stacktrace');
+      log('SUNMI_DART FAILED ===> $e');
+      log('SUNMI_DART stacktrace ===> $stacktrace');
 
       if (e is ZencilloSunmiException) {
         return Err(e.message);
