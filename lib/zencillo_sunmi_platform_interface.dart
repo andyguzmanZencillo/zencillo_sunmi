@@ -55,19 +55,35 @@ abstract class ZencilloSunmiPlatform extends PlatformInterface {
     throw UnimplementedError('cutPaper() no implementado.');
   }
 
+  Future<bool> feedPaper({int lines = 8}) {
+    throw UnimplementedError('feedPaper() no implementado.');
+  }
+
   Future<bool> printQr(
     String data, {
     int size = 6,
     int errorLevel = 2,
   }) {
-    throw UnimplementedError('printQr() has not been implemented.');
-  }
-
-  Future<bool> feedPaper({int lines = 8}) {
-    throw UnimplementedError('feedPaper() no implementado.');
+    throw UnimplementedError('printQr() no implementado.');
   }
 
   Future<bool> printImageBytes(Uint8List bytes) {
     throw UnimplementedError('printImageBytes() no implementado.');
+  }
+
+  /// Nuevo método para usar el flujo igual al Java original.
+  Future<bool> printOriginal(
+    String content, {
+    int size = 24,
+  }) {
+    throw UnimplementedError('printOriginal() no implementado.');
+  }
+
+  /// Alias del método anterior.
+  Future<bool> printSunmiOriginal(
+    String content, {
+    int size = 24,
+  }) {
+    throw UnimplementedError('printSunmiOriginal() no implementado.');
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -12,6 +14,7 @@ class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
     final version = await methodChannel.invokeMethod<String>(
       'getPlatformVersion',
     );
+
     return version;
   }
 
@@ -40,21 +43,27 @@ class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
     int align = 0,
     bool bold = false,
   }) async {
-    final result = await methodChannel.invokeMethod<bool>('printText', {
-      'text': text,
-      'size': size,
-      'align': align,
-      'bold': bold,
-    });
+    final result = await methodChannel.invokeMethod<bool>(
+      'printText',
+      {
+        'text': text,
+        'size': size,
+        'align': align,
+        'bold': bold,
+      },
+    );
 
     return result ?? false;
   }
 
   @override
   Future<bool> feedPaper({int lines = 8}) async {
-    final result = await methodChannel.invokeMethod<bool>('feedPaper', {
-      'lines': lines,
-    });
+    final result = await methodChannel.invokeMethod<bool>(
+      'feedPaper',
+      {
+        'lines': lines,
+      },
+    );
 
     return result ?? false;
   }
@@ -67,9 +76,12 @@ class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
 
   @override
   Future<bool> lineWrap({int lines = 3}) async {
-    final result = await methodChannel.invokeMethod<bool>('lineWrap', {
-      'lines': lines,
-    });
+    final result = await methodChannel.invokeMethod<bool>(
+      'lineWrap',
+      {
+        'lines': lines,
+      },
+    );
 
     return result ?? false;
   }
@@ -100,9 +112,44 @@ class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
 
   @override
   Future<bool> printImageBytes(Uint8List bytes) async {
-    final result = await methodChannel.invokeMethod<bool>('printImageBytes', {
-      'bytes': bytes,
-    });
+    final result = await methodChannel.invokeMethod<bool>(
+      'printImageBytes',
+      {
+        'bytes': bytes,
+      },
+    );
+
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> printOriginal(
+    String content, {
+    int size = 24,
+  }) async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'printOriginal',
+      {
+        'content': content,
+        'size': size,
+      },
+    );
+
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> printSunmiOriginal(
+    String content, {
+    int size = 24,
+  }) async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'printSunmiOriginal',
+      {
+        'content': content,
+        'size': size,
+      },
+    );
 
     return result ?? false;
   }

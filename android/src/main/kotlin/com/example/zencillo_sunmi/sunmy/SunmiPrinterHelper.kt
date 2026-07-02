@@ -1,5 +1,4 @@
 import 'dart:developer';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:oxidized/oxidized.dart';
@@ -69,41 +68,6 @@ class ZencilloSunmi {
     return ZencilloSunmiPlatform.instance.printImageBytes(bytes);
   }
 
-  /// Nuevo método principal.
-  ///
-  /// Este llama al método Kotlin `printOriginal`, que replica:
-  ///
-  /// PrintSunmy.initPrint(sContent, nSize)
-  ///
-  /// Si el contenido trae QR, debe venir así:
-  ///
-  /// !-QR-!contenido_del_qr!-QR-!
-  static Future<bool> printOriginal(
-    String content, {
-    int size = 24,
-  }) {
-    return ZencilloSunmiPlatform.instance.printOriginal(
-      content,
-      size: size,
-    );
-  }
-
-  /// Alias por si prefieres este nombre.
-  static Future<bool> printSunmiOriginal(
-    String content, {
-    int size = 24,
-  }) {
-    return ZencilloSunmiPlatform.instance.printSunmiOriginal(
-      content,
-      size: size,
-    );
-  }
-
-  /// Método que tu app puede seguir usando igual que antes.
-  ///
-  /// Pero internamente ahora arma un solo String completo y llama
-  /// a `printOriginal`, para que Android/Kotlin imprima igual que
-  /// la librería Java original.
   static Future<Result<Unit, String>> sunmiPrint(
     List<String> text, {
     String? code,
@@ -111,28 +75,54 @@ class ZencilloSunmi {
     bool? isQr,
   }) async {
     try {
-      final fontSize = tamanioLetra ?? 20;
-      final buffer = StringBuffer();
+      final fontSize = (tamanioLetra ?? 20).toDouble();
+
+      final bindOk = await bindPrinter();
+
+      if (!bindOk) {
+        return const Err('No se pudo enlazar con la impresora Sunmi.');
+      }
+
+      await initPrinter();
 
       for (final element in text) {
-        buffer.writeln(element.trimRight());
+        final line = element.trimRight();
+
+        if (line.isEmpty) {
+          await lineWrap(lines: 1);
+        } else {
+          await printText(
+            line,
+            align: SunmiAlign.center,
+            size: fontSize,
+            bold: false,
+          );
+        }
       }
 
       if (code != null && code.trim().isNotEmpty && (isQr ?? false)) {
-        buffer.writeln();
-        buffer.writeln('!-QR-!${code.trim()}!-QR-!');
-        buffer.writeln();
+        await printText(
+          '  ',
+          align: SunmiAlign.center,
+          size: (tamanioLetra ?? 20).toDouble(),
+        );
+
+        await printQr(
+          code.trim(),
+          size: 6,
+          errorLevel: 2,
+        );
+
+        await lineWrap(lines: 1);
       }
 
-      final ok = await printOriginal(
-        buffer.toString(),
-        size: fontSize,
-      );
-
-      if (!ok) {
-        return const Err('No se pudo imprimir en Sunmi.');
+      for (int x = 1; x <= 6; x++) {
+        await printText(
+          '  ',
+          align: SunmiAlign.center,
+          size: (tamanioLetra ?? 20).toDouble(),
+        );
       }
-
       return const Ok(unit);
     } on PlatformException catch (e, stacktrace) {
       log('Sunmi PlatformException code ===> ${e.code}');
