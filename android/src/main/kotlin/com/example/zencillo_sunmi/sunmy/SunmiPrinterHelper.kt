@@ -1,163 +1,22 @@
-import 'dart:developer';
+package com.example.zencillo_sunmi.sunmy
 
-import 'package:flutter/services.dart';
-import 'package:oxidized/oxidized.dart';
+object ESCUtil {
 
-import 'zencillo_sunmi_platform_interface.dart';
+    private const val ESC: Byte = 0x1B
 
-class ZencilloSunmi {
-  static Future<String?> getPlatformVersion() {
-    return ZencilloSunmiPlatform.instance.getPlatformVersion();
-  }
-
-  static Future<bool> bindPrinter() {
-    return ZencilloSunmiPlatform.instance.bindPrinter();
-  }
-
-  static Future<bool> isConnected() {
-    return ZencilloSunmiPlatform.instance.isConnected();
-  }
-
-  static Future<bool> initPrinter() {
-    return ZencilloSunmiPlatform.instance.initPrinter();
-  }
-
-  static Future<bool> printText(
-    String text, {
-    double size = 24,
-    SunmiAlign align = SunmiAlign.left,
-    bool bold = false,
-  }) {
-    return ZencilloSunmiPlatform.instance.printText(
-      text,
-      size: size,
-      align: align.value,
-      bold: bold,
-    );
-  }
-
-  static Future<bool> printLine() {
-    return ZencilloSunmiPlatform.instance.printLine();
-  }
-
-  static Future<bool> lineWrap({int lines = 3}) {
-    return ZencilloSunmiPlatform.instance.lineWrap(lines: lines);
-  }
-
-  static Future<bool> cutPaper() {
-    return ZencilloSunmiPlatform.instance.cutPaper();
-  }
-
-  static Future<bool> feedPaper({int lines = 8}) {
-    return ZencilloSunmiPlatform.instance.feedPaper(lines: lines);
-  }
-
-  static Future<bool> printQr(
-    String data, {
-    int size = 6,
-    int errorLevel = 2,
-  }) {
-    return ZencilloSunmiPlatform.instance.printQr(
-      data,
-      size: size,
-      errorLevel: errorLevel,
-    );
-  }
-
-  static Future<bool> printImageBytes(Uint8List bytes) {
-    return ZencilloSunmiPlatform.instance.printImageBytes(bytes);
-  }
-
-  static Future<Result<Unit, String>> sunmiPrint(
-    List<String> text, {
-    String? code,
-    int? tamanioLetra,
-    bool? isQr,
-  }) async {
-    try {
-      final fontSize = (tamanioLetra ?? 20).toDouble();
-
-      final bindOk = await bindPrinter();
-
-      if (!bindOk) {
-        return const Err('No se pudo enlazar con la impresora Sunmi.');
-      }
-
-      await initPrinter();
-
-      for (final element in text) {
-        final line = element.trimRight();
-
-        if (line.isEmpty) {
-          await lineWrap(lines: 1);
-        } else {
-          await printText(
-            line,
-            align: SunmiAlign.center,
-            size: fontSize,
-            bold: false,
-          );
-        }
-      }
-
-      if (code != null && code.trim().isNotEmpty && (isQr ?? false)) {
-        await printText(
-          '  ',
-          align: SunmiAlign.center,
-          size: (tamanioLetra ?? 20).toDouble(),
-        );
-
-        await printQr(
-          code.trim(),
-          size: 6,
-          errorLevel: 2,
-        );
-
-        await lineWrap(lines: 1);
-      }
-
-      for (int x = 1; x <= 6; x++) {
-        await printText(
-          '  ',
-          align: SunmiAlign.center,
-          size: (tamanioLetra ?? 20).toDouble(),
-        );
-      }
-      return const Ok(unit);
-    } on PlatformException catch (e, stacktrace) {
-      log('Sunmi PlatformException code ===> ${e.code}');
-      log('Sunmi PlatformException message ===> ${e.message}');
-      log('Sunmi PlatformException stacktrace ===> $stacktrace');
-
-      return Err(e.message ?? 'Error de plataforma al imprimir en Sunmi.');
-    } catch (e, stacktrace) {
-      log('Sunmi Printer FAILED ===> $e');
-      log('Sunmi Printer FAILED stacktrace ===> $stacktrace');
-
-      if (e is ZencilloSunmiException) {
-        return Err(e.message);
-      }
-
-      return const Err('Algo falló al imprimir en Sunmi.');
+    fun boldOn(): ByteArray {
+        return byteArrayOf(ESC, 69, 1)
     }
-  }
-}
 
-enum SunmiAlign {
-  left(0),
-  center(1),
-  right(2);
+    fun boldOff(): ByteArray {
+        return byteArrayOf(ESC, 69, 0)
+    }
 
-  final int value;
+    fun underlineWithOneDotWidthOn(): ByteArray {
+        return byteArrayOf(ESC, 45, 1)
+    }
 
-  const SunmiAlign(this.value);
-}
-
-class ZencilloSunmiException implements Exception {
-  final String message;
-
-  const ZencilloSunmiException(this.message);
-
-  @override
-  String toString() => message;
+    fun underlineOff(): ByteArray {
+        return byteArrayOf(ESC, 45, 0)
+    }
 }
