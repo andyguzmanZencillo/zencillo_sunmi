@@ -1,22 +1,304 @@
 package com.example.zencillo_sunmi.sunmy
 
-object ESCUtil {
+import android.content.Context
+import android.os.RemoteException
+import android.util.Log
+import com.sunmi.peripheral.printer.InnerPrinterCallback
+import com.sunmi.peripheral.printer.InnerPrinterException
+import com.sunmi.peripheral.printer.InnerPrinterManager
+import com.sunmi.peripheral.printer.SunmiPrinterService
+import com.sunmi.peripheral.printer.WoyouConsts
 
-    private const val ESC: Byte = 0x1B
+class SunmiPrintHelper private constructor() {
 
-    fun boldOn(): ByteArray {
-        return byteArrayOf(ESC, 69, 1)
+    companion object {
+        private const val TAG = "SunmiPrintHelper"
+
+        const val NoSunmiPrinter = 0x00000000
+        const val CheckSunmiPrinter = 0x00000001
+        const val FoundSunmiPrinter = 0x00000002
+        const val LostSunmiPrinter = 0x00000003
+
+        private val helper = SunmiPrintHelper()
+
+        fun getInstance(): SunmiPrintHelper {
+            return helper
+        }
     }
 
-    fun boldOff(): ByteArray {
-        return byteArrayOf(ESC, 69, 0)
+    var sunmiPrinter: Int = CheckSunmiPrinter
+        private set
+
+    private var sunmiPrinterService: SunmiPrinterService? = null
+
+    private val innerPrinterCallback = object : InnerPrinterCallback() {
+        override fun onConnected(service: SunmiPrinterService?) {
+            sunmiPrinterService = service
+
+            if (service != null) {
+                checkSunmiPrinterService(service)
+            } else {
+                sunmiPrinter = NoSunmiPrinter
+            }
+        }
+
+        override fun onDisconnected() {
+            sunmiPrinterService = null
+            sunmiPrinter = LostSunmiPrinter
+        }
     }
 
-    fun underlineWithOneDotWidthOn(): ByteArray {
-        return byteArrayOf(ESC, 45, 1)
+    fun initSunmiPrinterService(context: Context) {
+        try {
+            var ret = false
+
+            for (nIntento in 0..50) {
+                ret = InnerPrinterManager.getInstance().bindService(
+                    context,
+                    innerPrinterCallback
+                )
+
+                if (ret) {
+                    break
+                }
+            }
+
+            if (!ret) {
+                sunmiPrinter = NoSunmiPrinter
+            }
+        } catch (e: InnerPrinterException) {
+            e.printStackTrace()
+            sunmiPrinter = NoSunmiPrinter
+        } catch (e: Exception) {
+            e.printStackTrace()
+            sunmiPrinter = NoSunmiPrinter
+        }
     }
 
-    fun underlineOff(): ByteArray {
-        return byteArrayOf(ESC, 45, 0)
+    fun deInitSunmiPrinterService(context: Context) {
+        try {
+            if (sunmiPrinterService != null) {
+                InnerPrinterManager.getInstance().unBindService(
+                    context,
+                    innerPrinterCallback
+                )
+
+                sunmiPrinterService = null
+                sunmiPrinter = LostSunmiPrinter
+            }
+        } catch (e: InnerPrinterException) {
+            e.printStackTrace()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun checkSunmiPrinterService(service: SunmiPrinterService) {
+        var ret = false
+
+        try {
+            ret = InnerPrinterManager.getInstance().hasPrinter(service)
+        } catch (e: InnerPrinterException) {
+            e.printStackTrace()
+        }
+
+        sunmiPrinter = if (ret) FoundSunmiPrinter else NoSunmiPrinter
+    }
+
+    private fun handleRemoteException(e: RemoteException) {
+        e.printStackTrace()
+    }
+
+    fun isConnected(): Boolean {
+        return sunmiPrinterService != null
+    }
+
+    fun sendRawData(data: ByteArray) {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            service.sendRAWData(data, null)
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+        }
+    }
+
+    fun cutpaper() {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            service.cutPaper(null)
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+        }
+    }
+
+    fun initPrinter() {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            service.printerInit(null)
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+        }
+    }
+
+    fun print3Line() {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            service.lineWrap(3, null)
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+        }
+    }
+
+    fun lineWrap(lines: Int) {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            service.lineWrap(lines, null)
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+        }
+    }
+
+    fun getPrinterSerialNo(): String {
+        val service = sunmiPrinterService ?: return ""
+
+        return try {
+            service.printerSerialNo
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+            ""
+        }
+    }
+
+    fun getDeviceModel(): String {
+        val service = sunmiPrinterService ?: return ""
+
+        return try {
+            service.printerModal
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+            ""
+        }
+    }
+
+    fun getPrinterVersion(): String {
+        val service = sunmiPrinterService ?: return ""
+
+        return try {
+            service.printerVersion
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+            ""
+        }
+    }
+
+    fun getPrinterPaper(): String {
+        val service = sunmiPrinterService ?: return ""
+
+        return try {
+            if (service.printerPaper == 1) "58mm" else "80mm"
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+            ""
+        }
+    }
+
+    fun setAlign(align: Int): Boolean {
+        val service = sunmiPrinterService
+
+        if (service == null) {
+            Log.d(TAG, "NO LOGRO ALINEAR")
+            return false
+        }
+
+        return try {
+            Log.d(TAG, "SI LOGRO ALINEAR")
+            service.setAlignment(align, null)
+            true
+        } catch (e: RemoteException) {
+            Log.d(TAG, "SI NO LOGRO ALINEAR")
+            handleRemoteException(e)
+            false
+        } catch (e: Exception) {
+            Log.d(TAG, "SI NO LOGRO ALINEAR")
+            false
+        }
+    }
+
+    fun feedPaper(context: Context) {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            service.autoOutPaper(null)
+        } catch (e: RemoteException) {
+            print3Line()
+        } catch (e: Exception) {
+            print3Line()
+        }
+    }
+
+    fun printText(
+        content: String,
+        size: Float,
+        isBold: Boolean,
+        isUnderLine: Boolean
+    ) {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            try {
+                service.setPrinterStyle(WoyouConsts.SET_LINE_SPACING, 0)
+            } catch (e: RemoteException) {
+                service.sendRAWData(byteArrayOf(0x1B, 0x33, 0x00), null)
+            }
+
+            try {
+                service.setPrinterStyle(
+                    WoyouConsts.ENABLE_BOLD,
+                    if (isBold) WoyouConsts.ENABLE else WoyouConsts.DISABLE
+                )
+            } catch (e: RemoteException) {
+                if (isBold) {
+                    service.sendRAWData(ESCUtil.boldOn(), null)
+                } else {
+                    service.sendRAWData(ESCUtil.boldOff(), null)
+                }
+            }
+
+            try {
+                service.setPrinterStyle(
+                    WoyouConsts.ENABLE_UNDERLINE,
+                    if (isUnderLine) WoyouConsts.ENABLE else WoyouConsts.DISABLE
+                )
+            } catch (e: RemoteException) {
+                if (isUnderLine) {
+                    service.sendRAWData(ESCUtil.underlineWithOneDotWidthOn(), null)
+                } else {
+                    service.sendRAWData(ESCUtil.underlineOff(), null)
+                }
+            }
+
+            service.printTextWithFont(content, null, size, null)
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+        }
+    }
+
+    fun printQr(
+        data: String,
+        modulesize: Int,
+        errorlevel: Int
+    ) {
+        val service = sunmiPrinterService ?: return
+
+        try {
+            service.printQRCode(data, modulesize, errorlevel, null)
+        } catch (e: RemoteException) {
+            handleRemoteException(e)
+        }
     }
 }
