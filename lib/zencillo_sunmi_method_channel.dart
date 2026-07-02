@@ -1,147 +1,177 @@
-import 'dart:typed_data';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:oxidized/oxidized.dart';
 
 import 'zencillo_sunmi_platform_interface.dart';
 
 class MethodChannelZencilloSunmi extends ZencilloSunmiPlatform {
-  @visibleForTesting
-  final methodChannel = const MethodChannel('zencillo_sunmi');
+  static const MethodChannel _channel = MethodChannel('zencillo_sunmi');
+
+  MethodChannelZencilloSunmi();
 
   @override
-  Future<String?> getPlatformVersion() async {
-    final version = await methodChannel.invokeMethod<String>(
-      'getPlatformVersion',
-    );
-
-    return version;
+  Future<Result<Unit, String>> init() async {
+    try {
+      await _channel.invokeMethod<bool>('init');
+      return const Ok(unit);
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
   }
 
   @override
-  Future<bool> bindPrinter() async {
-    final result = await methodChannel.invokeMethod<bool>('bindPrinter');
-    return result ?? false;
+  Future<Result<bool, String>> isConnected() async {
+    try {
+      final response = await _channel.invokeMethod<bool>('isConnected');
+      return Ok(response ?? false);
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
   }
 
   @override
-  Future<bool> isConnected() async {
-    final result = await methodChannel.invokeMethod<bool>('isConnected');
-    return result ?? false;
-  }
-
-  @override
-  Future<bool> initPrinter() async {
-    final result = await methodChannel.invokeMethod<bool>('initPrinter');
-    return result ?? false;
-  }
-
-  /// Igual al método original Java:
-  ///
-  /// PrintSunmy.initPrint(String sContent, int nSize)
-  @override
-  Future<bool> initPrint(
-    String sContent, {
-    int nSize = 24,
+  Future<Result<Unit, String>> sunmiPrint(
+    List<String> text, {
+    String? code,
+    int? tamanioLetra,
+    bool? isQr,
   }) async {
-    debugPrint('SUNMI_CHANNEL ===> invoke initPrint');
+    try {
+      final buffer = StringBuffer();
 
-    final result = await methodChannel.invokeMethod<bool>(
-      'initPrint',
-      {
-        'sContent': sContent,
-        'nSize': nSize,
-      },
-    );
+      for (final line in text) {
+        buffer.writeln(line);
+      }
 
-    debugPrint('SUNMI_CHANNEL ===> initPrint result: $result');
+      if (code != null && code.trim().isNotEmpty) {
+        if (isQr == true) {
+          buffer.write('!-QR-!');
+          buffer.write(code.trim());
+          buffer.write('!-QR-!');
+        } else {
+          buffer.writeln(code.trim());
+        }
+      }
 
-    return result ?? false;
+      await _channel.invokeMethod<void>('sunmiPrint', <String, dynamic>{
+        'text': buffer.toString(),
+        'size': tamanioLetra ?? 22,
+      });
+
+      return const Ok(unit);
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
   }
 
   @override
-  Future<bool> printText(
+  Future<Result<Unit, String>> printText(
     String text, {
-    double size = 24,
-    int align = 0,
-    bool bold = false,
+    int? tamanioLetra,
+    bool? bold,
+    bool? underline,
+    int? align,
+    int? feedLines,
   }) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'printText',
-      {
+    try {
+      await _channel.invokeMethod<void>('printText', <String, dynamic>{
         'text': text,
-        'size': size,
-        'align': align,
-        'bold': bold,
-      },
-    );
+        'size': tamanioLetra ?? 22,
+        'bold': bold ?? true,
+        'underline': underline ?? false,
+        'align': align ?? 1,
+        'feedLines': feedLines ?? 6,
+      });
 
-    return result ?? false;
+      return const Ok(unit);
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
   }
 
   @override
-  Future<bool> feedPaper({int lines = 8}) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'feedPaper',
-      {
-        'lines': lines,
-      },
-    );
-
-    return result ?? false;
-  }
-
-  @override
-  Future<bool> printLine() async {
-    final result = await methodChannel.invokeMethod<bool>('printLine');
-    return result ?? false;
-  }
-
-  @override
-  Future<bool> lineWrap({int lines = 3}) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'lineWrap',
-      {
-        'lines': lines,
-      },
-    );
-
-    return result ?? false;
-  }
-
-  @override
-  Future<bool> cutPaper() async {
-    final result = await methodChannel.invokeMethod<bool>('cutPaper');
-    return result ?? false;
-  }
-
-  @override
-  Future<bool> printQr(
-    String data, {
-    int size = 6,
-    int errorLevel = 2,
+  Future<Result<Unit, String>> printQr(
+    String code, {
+    int? size,
   }) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'printQr',
-      {
-        'data': data,
-        'size': size,
-        'errorLevel': errorLevel,
-      },
-    );
+    try {
+      await _channel.invokeMethod<void>('printQr', <String, dynamic>{
+        'data': code,
+        'size': size ?? 5,
+        'errorLevel': 0,
+      });
 
-    return result ?? false;
+      return const Ok(unit);
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
   }
 
   @override
-  Future<bool> printImageBytes(Uint8List bytes) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'printImageBytes',
-      {
-        'bytes': bytes,
-      },
-    );
+  Future<Result<Unit, String>> feed({
+    int? lines,
+  }) async {
+    try {
+      await _channel.invokeMethod<void>('feed', <String, dynamic>{
+        'lines': lines ?? 3,
+      });
 
-    return result ?? false;
+      return const Ok(unit);
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
+  }
+
+  @override
+  Future<Result<Unit, String>> cut() async {
+    try {
+      await _channel.invokeMethod<void>('cut');
+      return const Ok(unit);
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
+  }
+
+  @override
+  Future<Result<Map<String, dynamic>, String>> getStatus() async {
+    try {
+      final response = await _channel.invokeMapMethod<String, dynamic>(
+        'getStatus',
+      );
+
+      return Ok(response ?? <String, dynamic>{});
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
+  }
+
+  @override
+  Future<Result<Map<String, dynamic>, String>> getPrinterInfo() async {
+    try {
+      final response = await _channel.invokeMapMethod<String, dynamic>(
+        'getPrinterInfo',
+      );
+
+      return Ok(response ?? <String, dynamic>{});
+    } on PlatformException catch (e) {
+      return Err(e.message ?? e.code);
+    } catch (e) {
+      return Err(e.toString());
+    }
   }
 }

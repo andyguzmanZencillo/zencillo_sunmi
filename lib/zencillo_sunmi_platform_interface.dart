@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:oxidized/oxidized.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'zencillo_sunmi_method_channel.dart';
@@ -18,66 +17,38 @@ abstract class ZencilloSunmiPlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  Future<String?> getPlatformVersion() {
-    throw UnimplementedError('getPlatformVersion() no implementado.');
-  }
+  Future<Result<Unit, String>> init();
 
-  Future<bool> bindPrinter() {
-    throw UnimplementedError('bindPrinter() no implementado.');
-  }
+  Future<Result<bool, String>> isConnected();
 
-  Future<bool> isConnected() {
-    throw UnimplementedError('isConnected() no implementado.');
-  }
+  Future<Result<Unit, String>> sunmiPrint(
+    List<String> text, {
+    String? code,
+    int? tamanioLetra,
+    bool? isQr,
+  });
 
-  Future<bool> initPrinter() {
-    throw UnimplementedError('initPrinter() no implementado.');
-  }
-
-  /// Igual al método original Java:
-  ///
-  /// PrintSunmy.initPrint(String sContent, int nSize)
-  Future<bool> initPrint(
-    String sContent, {
-    int nSize = 24,
-  }) {
-    throw UnimplementedError('initPrint() no implementado.');
-  }
-
-  Future<bool> printText(
+  Future<Result<Unit, String>> printText(
     String text, {
-    double size = 24,
-    int align = 0,
-    bool bold = false,
-  }) {
-    throw UnimplementedError('printText() no implementado.');
-  }
+    int? tamanioLetra,
+    bool? bold,
+    bool? underline,
+    int? align,
+    int? feedLines,
+  });
 
-  Future<bool> printLine() {
-    throw UnimplementedError('printLine() no implementado.');
-  }
+  Future<Result<Unit, String>> printQr(
+    String code, {
+    int? size,
+  });
 
-  Future<bool> lineWrap({int lines = 3}) {
-    throw UnimplementedError('lineWrap() no implementado.');
-  }
+  Future<Result<Unit, String>> feed({
+    int? lines,
+  });
 
-  Future<bool> cutPaper() {
-    throw UnimplementedError('cutPaper() no implementado.');
-  }
+  Future<Result<Unit, String>> cut();
 
-  Future<bool> feedPaper({int lines = 8}) {
-    throw UnimplementedError('feedPaper() no implementado.');
-  }
+  Future<Result<Map<String, dynamic>, String>> getStatus();
 
-  Future<bool> printQr(
-    String data, {
-    int size = 6,
-    int errorLevel = 2,
-  }) {
-    throw UnimplementedError('printQr() no implementado.');
-  }
-
-  Future<bool> printImageBytes(Uint8List bytes) {
-    throw UnimplementedError('printImageBytes() no implementado.');
-  }
+  Future<Result<Map<String, dynamic>, String>> getPrinterInfo();
 }
