@@ -75,8 +75,6 @@ class ZencilloSunmi {
         return const Err('No se pudo enlazar con la impresora Sunmi.');
       }
 
-      await Future.delayed(const Duration(milliseconds: 300));
-
       final connected = await isConnected();
 
       if (!connected) {
